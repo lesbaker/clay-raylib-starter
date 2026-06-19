@@ -87,19 +87,8 @@ pub fn build(b: *std.Build) !void {
 
     b.installArtifact(raylib_lib);
     b.installArtifact(the_exe);
-    // const raylib_h_file = b.addInstallFile(raylib_dep.path("src/raylib.h"), "raylib.h");
-    // const raymath_h_file = b.addInstallFile(raylib_dep.path("src/raymath.h"), "raymath.h");
-    // const rcamera_h_file = b.addInstallFile(raylib_dep.path("src/rcamera.h"), "rcamera.h");
-    // const rgestures_h_file = b.addInstallFile(raylib_dep.path("src/rgestures.h"), "rgestures.h");
-    // const rlgl_h_file = b.addInstallFile(raylib_dep.path("src/rlgl.h"), "rlgl.h");
 
     const clay_h_file = b.addInstallHeaderFile(clay_dep.path("clay.h"), "clay.h");
-
-    // b.default_step.dependOn(&raylib_h_file.step);
-    // b.default_step.dependOn(&raymath_h_file.step);
-    // b.default_step.dependOn(&rcamera_h_file.step);
-    // b.default_step.dependOn(&rgestures_h_file.step);
-    // b.default_step.dependOn(&rlgl_h_file.step);
 
     b.default_step.dependOn(&clay_h_file.step);
     b.default_step.dependOn(&the_exe.step);
