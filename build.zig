@@ -9,34 +9,37 @@ const ClangdConfig = struct {
     file: std.Build.LazyPath,
 };
 
-const config_template =
-    \\CompileFlags:
-    \\  Add:
-    \\    - -I{s}
-    \\
-;
-
 const exe_name: []const u8 = "starter";
 
-pub fn create_dot_clangd_config_step(b: *std.Build) *const ClangdConfig {
-    const wf_step = b.addWriteFiles();
+pub fn create_dot_clangd_config_file_contents(b: *std.Build) []const u8 {
+    const config_template =
+        \\CompileFlags:
+        \\  Add:
+        \\    - -I{s}
+        \\
+    ;
     const cur_path: []const u8 = std.process.currentPathAlloc(b.graph.io, b.allocator) catch @panic("OOM");
     defer b.allocator.free(cur_path);
     const abs_install_path = b.pathResolve(&.{
         cur_path,
         b.install_path,
+        "include",
     });
     defer b.allocator.free(abs_install_path);
 
-    const clangd_config = b.fmt(config_template, .{abs_install_path});
-    const clangd_file = wf_step.add(".clangd", clangd_config);
-
-    return &.{ .wf_step = wf_step, .file = clangd_file };
+    return b.fmt(config_template, .{abs_install_path});
 }
 
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+
+    const src_path = b.path("src");
+    const c_lang_mod_create_opts: std.Build.Module.CreateOptions = .{
+        .link_libc = true,
+        .target = target,
+        .optimize = optimize,
+    };
 
     const raylib_dep = b.dependency("raylib", .{});
     const raylib_lib = raylib_dep.artifact("raylib");
@@ -60,34 +63,18 @@ pub fn build(b: *std.Build) !void {
         "create-clangd-dotfile",
         "Generate clangd dotfile to assist compatible code editors",
     );
-    // const clangd_file = create_dot_clangd_config_step(b);
     const wf_step = b.addWriteFiles();
-    const cur_path: []const u8 = std.process.currentPathAlloc(b.graph.io, b.allocator) catch @panic("OOM");
-    defer b.allocator.free(cur_path);
-    const abs_install_path = b.pathResolve(&.{
-        cur_path,
-        b.install_path,
-        "include",
-    });
-    defer b.allocator.free(abs_install_path);
-
-    const clangd_config = b.fmt(config_template, .{abs_install_path});
-    const clangd_file = wf_step.add(".clangd", clangd_config);
-    const clangd_install_step = b.addInstallFile(clangd_file, ".clangd");
+    const clangd_file_path = wf_step.add(
+        ".clangd",
+        create_dot_clangd_config_file_contents(b),
+    );
+    const clangd_install_step = b.addInstallFile(clangd_file_path, ".clangd");
 
     clangd_config_step.dependOn(&clangd_install_step.step);
     clangd_install_step.step.dependOn(&wf_step.step);
 
-    const hello_mod = b.createModule(.{
-        .link_libc = true,
-        .target = target,
-        .optimize = optimize,
-    });
-
-    hello_mod.addCSourceFiles(.{
-        .root = b.path("src"),
-        .files = &src_files,
-    });
+    const hello_mod = b.createModule(c_lang_mod_create_opts);
+    hello_mod.addCSourceFiles(.{ .root = src_path, .files = &src_files });
     hello_mod.addIncludePath(raylib_lib.getEmittedIncludeTree());
     hello_mod.addIncludePath(clay_dep.path(""));
     hello_mod.linkSystemLibrary("raylib", .{});
