@@ -30,11 +30,27 @@ pub fn create_dot_clangd_config_file_contents(b: *std.Build) []const u8 {
     return b.fmt(config_template, .{abs_install_path});
 }
 
+fn init_exe_mod(exe_mod: *std.Build.Module, b: *std.Build) *std.Build.Module {
+    const raylib_dep = b.dependency("raylib", .{});
+    const raylib_lib = raylib_dep.artifact("raylib");
+    const clay_dep = b.dependency("clay", .{});
+
+    exe_mod.addCSourceFiles(.{
+        .root = b.path("src"),
+        .files = &src_files,
+    });
+    exe_mod.addIncludePath(raylib_lib.getEmittedIncludeTree());
+    exe_mod.addIncludePath(clay_dep.path(""));
+    exe_mod.linkSystemLibrary("raylib", .{});
+    exe_mod.linkSystemLibrary("X11", .{});
+
+    return exe_mod;
+}
+
 pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const src_path = b.path("src");
     const c_lang_mod_create_opts: std.Build.Module.CreateOptions = .{
         .link_libc = true,
         .target = target,
@@ -64,25 +80,20 @@ pub fn build(b: *std.Build) !void {
         "Generate clangd dotfile to assist compatible code editors",
     );
     const wf_step = b.addWriteFiles();
-    const clangd_file_path = wf_step.add(
+    const clangd_install_step = b.addInstallFile(
+        wf_step.add(
+            ".clangd",
+            create_dot_clangd_config_file_contents(b),
+        ),
         ".clangd",
-        create_dot_clangd_config_file_contents(b),
     );
-    const clangd_install_step = b.addInstallFile(clangd_file_path, ".clangd");
 
     clangd_config_step.dependOn(&clangd_install_step.step);
     clangd_install_step.step.dependOn(&wf_step.step);
 
-    const hello_mod = b.createModule(c_lang_mod_create_opts);
-    hello_mod.addCSourceFiles(.{ .root = src_path, .files = &src_files });
-    hello_mod.addIncludePath(raylib_lib.getEmittedIncludeTree());
-    hello_mod.addIncludePath(clay_dep.path(""));
-    hello_mod.linkSystemLibrary("raylib", .{});
-    hello_mod.linkSystemLibrary("X11", .{});
-
     const the_exe = b.addExecutable(.{
         .name = exe_name,
-        .root_module = hello_mod,
+        .root_module = init_exe_mod(b.createModule(c_lang_mod_create_opts), b),
     });
 
     b.installArtifact(raylib_lib);
